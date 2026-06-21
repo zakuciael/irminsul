@@ -217,7 +217,7 @@ async fn get_database(
     let mut storage_dir = eframe::storage_dir(APP_ID).unwrap();
     storage_dir.push("data_cache.json");
 
-    let mut db = anime_game_data::AnimeGameData::new_with_cache(&storage_dir).unwrap();
+    let mut db = anime_game_data::AnimeGameData::new_with_cache(&storage_dir);
     if db.needs_update().await? {
         let confirmation_type = if db.has_data() {
             ConfirmationType::Update
