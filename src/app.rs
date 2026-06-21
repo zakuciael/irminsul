@@ -18,7 +18,6 @@ use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::monitor::Monitor;
 use crate::player_data::ExportSettings;
-use crate::update::check_for_app_update;
 use crate::{
     AppState, ConfirmationType, Message, ReloadHandle, State, TracingLevel, capture, open_log_dir,
     wish,
@@ -87,8 +86,6 @@ pub struct IrminsulApp {
     optimizer_save_path: Option<PathBuf>,
     optimizer_export_target: OptimizerExportTarget,
 
-    restarting: bool,
-
     saved_state: SavedAppState,
 }
 
@@ -119,22 +116,16 @@ fn start_async_runtime(
     watch::Receiver<Option<String>>,
 ) {
     tracing::info!("starting tokio async");
-    let (ui_message_tx, mut ui_message_rx) = mpsc::unbounded_channel::<Message>();
+    let (ui_message_tx, ui_message_rx) = mpsc::unbounded_channel::<Message>();
 
     let (state_tx, state_rx) = watch::channel(AppState::new());
     let (wish_url_tx, wish_url_rx) = watch::channel(None);
-    let mut updater_state_rx = state_rx.clone();
-    let updater_ctx = egui_ctx.clone();
+    let mut state_change_rx = state_rx.clone();
+    let repaint_ctx = egui_ctx.clone();
     thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            // Before starting the monitor, check for updates if not in debug mode
-            tracing::info!("Checking for update");
-            if let Err(e) = check_for_app_update(&state_tx, &mut ui_message_rx).await {
-                tracing::error!("error checking for update: {e}");
-            }
-
             // Check for wish URL
             tokio::spawn(async move {
                 let Ok(mut wish) = wish::Wish::new(wish_url_tx).await else {
@@ -150,8 +141,8 @@ fn start_async_runtime(
             // Notify egui of state changes.
             tokio::spawn(async move {
                 loop {
-                    let _ = updater_state_rx.changed().await;
-                    updater_ctx.request_repaint();
+                    let _ = state_change_rx.changed().await;
+                    repaint_ctx.request_repaint();
                 }
             });
             tracing::info!("Starting monitor");
@@ -218,7 +209,6 @@ impl IrminsulApp {
             optimizer_save_dialog: None,
             optimizer_save_path: None,
             optimizer_export_target: OptimizerExportTarget::None,
-            restarting: false,
             state_rx,
             wish_url_rx,
         }
@@ -292,12 +282,6 @@ impl eframe::App for IrminsulApp {
                     let state = self.state_rx.borrow_and_update().clone();
                     ui.vertical(|ui| match state.state {
                         State::Starting => (),
-                        State::CheckingForUpdate => self.checking_for_update_ui(ui),
-                        State::WaitingForUpdateConfirmation(status) => {
-                            self.waiting_for_update_confirmation_ui(ui, status)
-                        }
-                        State::Updating => self.updating_ui(ui),
-                        State::Updated => self.updated_ui(ui),
                         State::CheckingForData => self.checking_for_data_ui(ui),
                         State::WaitingForDownloadConfirmation(confirmation_type) => {
                             self.waiting_for_download_confirmation_ui(ui, confirmation_type)
@@ -384,51 +368,6 @@ impl IrminsulApp {
 
         if response.drag_started_by(PointerButton::Primary) {
             ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
-        }
-    }
-
-    fn checking_for_update_ui(&self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label("Checking for Irminsul updates".to_string());
-        });
-    }
-
-    fn waiting_for_update_confirmation_ui(&self, ui: &mut egui::Ui, version: String) {
-        ui.label(format!(
-            "Update {} available.  Download and install?",
-            version
-        ));
-
-        ui.horizontal(|ui| {
-            if ui.add(egui::Button::new("Yes")).clicked() {
-                if let Err(e) = self.ui_message_tx.send(Message::UpdateAcknowledged) {
-                    tracing::error!("Unable to send UI message: {e}");
-                }
-            }
-            if ui.add(egui::Button::new("No")).clicked() {
-                if let Err(e) = self.ui_message_tx.send(Message::UpdateCanceled) {
-                    tracing::error!("Unable to send UI message: {e}");
-                }
-            }
-        });
-    }
-
-    fn updating_ui(&self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label("Downloading and updating...".to_string());
-            ui.spinner();
-        });
-    }
-
-    fn updated_ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label("Updated. Restarting...".to_string());
-        });
-        if !self.restarting {
-            let program_name = std::env::args().next().unwrap();
-            let _ = std::process::Command::new(program_name).spawn();
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            self.restarting = true;
         }
     }
 

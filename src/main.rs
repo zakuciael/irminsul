@@ -20,7 +20,6 @@ mod capture;
 mod good;
 mod monitor;
 mod player_data;
-mod update;
 mod wish;
 
 const APP_ID: &str = "Irminsul";
@@ -34,10 +33,6 @@ pub enum ConfirmationType {
 #[derive(Clone, Debug)]
 pub enum State {
     Starting,
-    CheckingForUpdate,
-    WaitingForUpdateConfirmation(String),
-    Updating,
-    Updated,
     CheckingForData,
     WaitingForDownloadConfirmation(ConfirmationType),
     Downloading,
@@ -46,8 +41,6 @@ pub enum State {
 
 #[derive(Debug)]
 pub enum Message {
-    UpdateAcknowledged,
-    UpdateCanceled,
     DownloadAcknowledged,
     StartCapture,
     StopCapture,
@@ -173,6 +166,7 @@ fn main() -> eframe::Result {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_app_id("irminsul")
             .with_inner_size(background_image_size.map(|v| v * 0.5))
             .with_resizable(false)
             .with_decorations(false)
