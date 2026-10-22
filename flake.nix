@@ -92,18 +92,30 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              nativeBuildInputs = commonArgs.nativeBuildInputs ++ (with pkgs; [
-                copyDesktopItems
-                makeWrapper
-              ]);
+              nativeBuildInputs =
+                commonArgs.nativeBuildInputs
+                ++ (with pkgs; [
+                  copyDesktopItems
+                  makeWrapper
+                ]);
               desktopItems = [ desktopItem ];
               RELEASE_BUILD = "1";
 
               postInstall = ''
                 install -Dm644 assets/icon-256.png \
                   $out/share/icons/hicolor/256x256/apps/irminsul.png
-                wrapProgram $out/bin/irminsul \
-                  --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath (with pkgs; [ libGL libxkbcommon wayland ])}
+
+                makeBinaryWrapper $out/bin/irminsul \
+                  --prefix LD_LIBRARY_PATH : ${
+                    pkgs.lib.makeLibraryPath (
+                      with pkgs;
+                      [
+                        libGL
+                        libxkbcommon
+                        wayland
+                      ]
+                    )
+                  }
               '';
 
               meta = with pkgs.lib; {
