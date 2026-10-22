@@ -96,7 +96,7 @@
                 commonArgs.nativeBuildInputs
                 ++ (with pkgs; [
                   copyDesktopItems
-                  makeWrapper
+                  makeBinaryWrapper
                 ]);
               desktopItems = [ desktopItem ];
               RELEASE_BUILD = "1";
@@ -105,7 +105,7 @@
                 install -Dm644 assets/icon-256.png \
                   $out/share/icons/hicolor/256x256/apps/irminsul.png
 
-                makeBinaryWrapper $out/bin/irminsul \
+                wrapProgram $out/bin/irminsul \
                   --prefix LD_LIBRARY_PATH : ${
                     pkgs.lib.makeLibraryPath (
                       with pkgs;
