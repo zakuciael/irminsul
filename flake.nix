@@ -131,6 +131,7 @@
         in
         {
           packages.default = irminsul;
+          checks.irminsul = irminsul;
 
           devShells.default = pkgs.mkShell {
             inputsFrom = [ irminsul ];
